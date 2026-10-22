@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UJI KEAMANAN — P4 Mobile Lab v1 (Bitget Bounty)</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:14px}
+  .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-bottom:14px}
+  h2{font-size:15px;margin:0 0 8px;color:#58a6ff}
+  .warn{background:#3d1d1d;border:1px solid #f85149;color:#ffb3ad;padding:10px;border-radius:8px;font-size:13px;margin-bottom:14px}
+  .mono{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;margin:6px 0;white-space:pre-wrap}
+  button{background:#238636;color:#fff;border:0;border-radius:6px;padding:8px 12px;margin:4px 6px 4px 0;font-weight:600;cursor:pointer;font-size:13px}
+  button.b{background:#1f6feb}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+  td,th{border:1px solid #30363d;padding:6px;text-align:left}
+  th{color:#58a6ff}
+  code{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:4px;font-size:11px;word-break:break-all;display:block;margin:4px 0}
+  img.qr{background:#fff;border-radius:6px;padding:6px;display:block;margin:6px 0}
+  iframe{width:100%;height:280px;border:1px dashed #30363d;margin-top:8px;border-radius:6px;background:#0d1117}
+  .note{font-size:12px;color:#8b949e;margin-top:6px}
+  .ok{color:#3fb950}.bad{color:#f85149}
+</style>
+</head>
+<body>
+<div class="warn"><b>ATURAN:</b> burner saja. personal_sign/permit = boleh ditandatangani (gratis). <b>SEMUA layar kirim/tx WAJIB CANCEL</b> — kita hanya POTRET tampilannya. POTRET setiap layar penting.</div>
+
+<div class="card">
+  <h2>A. STATUS KONTEKS</h2>
+  <div class="mono" id="st">mengukur…</div>
+  <button onclick="bukaBitget()">BUKA DI BROWSER BITGET</button>
+  <div class="note">Dari Chrome HP: tombol ini pindah ke dApp-browser Bitget. Di dalam browser Bitget sendiri, tombol ini tidak perlu.</div>
+</div>
+
+<div class="card">
+  <h2>B. QR / EIP-681 (buka halaman ini di PC, scan pakai scanner Bitget di HP)</h2>
+  <div id="qrbox"></div>
+  <div class="note">Untuk tiap QR: scan → <b>POTRET layar ringkasan kirim</b> (alamat &amp; jumlah yang di-parse) → <b>CANCEL</b>. Dicari: alamat/jumlah ter-parse BEDA dari URI, angka salah format, chain @1 diabaikan.</div>
+</div>
+
+<div class="card">
+  <h2>C. TORTUR PASTE ALAMAT (COPY → tempel di layar Kirim wallet → POTRET hasil parse → kembali)</h2>
+  <div id="tor"></div>
+  <div class="note">Dicari: spasi/newline diterima? karakter tak terlihat (U+200B) mengubah alamat? U+202E membalik urutan tampilan? checksum rusak diberi peringatan atau diam-diam diterima?</div>
+</div>
+
+<div class="card">
+  <h2>D. TAMPILAN SIGN DI dApp-BROWSER (POTRET lembar konfirmasi: origin/URL ditampilkan?)</h2>
+  <button onclick="psign()">1. personal_sign</button>
+  <button class="b" onclick="esign()">2. EIP-712 Permit USDC</button>
+  <div class="mono" id="dout">—</div>
+</div>
+
+<div class="card">
+  <h2>E. PROBE IFRAME DI MOBILE (apakah MOBILE menginjeksikan provider ke iframe? — iframe sudah pakai allow="ethereum")</h2>
+  <input id="frameUrl" style="width:100%;box-sizing:border-box;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:8px;font-family:ui-monospace,monospace;font-size:12px" spellcheck="false" value="https://extraordinary-frangipane-11c89d.netlify.app/">
+  <button onclick="muatIframe()">Muat iframe</button>
+  <button onclick="kirimPing()">Ping</button>
+  <button onclick="kirimConnect()">1-KLIK: CONNECTKAN DARI IFRAME</button>
+  <div class="mono" id="stat">status: —</div>
+  <iframe id="f" allow="ethereum"></iframe>
+  <table id="res"><tr><th>Origin iframe</th><th>provider</th><th>flag Bitget</th></tr></table>
+  <div class="note">provider TIDAK ADA = aman (mobile sama dgn extension). provider ADA → 1-KLIK → POTRET lembar konfirmasi: origin github.io (req dari netlify) = TEMUAN.</div>
+</div>
+
+<!-- ===== VIEW DALAM IFRAME ===== -->
+<div id="iframeView" style="display:none">
+  <div class="card">
+    <h2>MODE PROBE (saya di dalam iframe)</h2>
+    <div class="mono" id="inInfo">mengukur…</div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const B2="0xc8CEe9dc9da67Af0eF121d7251aE8Fcaf28DBF";
+const USDC="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+const IS_TOP=(window.self===window.top);
+const eth=window.ethereum;
+
+if(!IS_TOP){
+  document.body.innerHTML='<div class="card"><h2>MODE PROBE (dalam iframe)</h2><div class="mono" id="inInfo">mengukur…</div></div>';
+}
+function detect(){return{href:location.href,ada:!!eth,bitget:!!(eth&&(eth.isBitKeep||eth.isBitgetWallet)),top:IS_TOP};}
+function report(){try{parent.postMessage({type:"provReport",...detect()},"*");}catch(e){}}
+
+if(IS_TOP){
+  const d=detect();
+  $("st").textContent="URL: "+d.href
+    +"\nUA: "+navigator.userAgent.slice(0,120)
+    +"\nprovider: "+(d.ada?"ADA":"TIDAK ADA")+" | flag Bitget: "+d.bitget
+    +"\nkonteks: "+(d.top?"top-level":"iframe")
+    +"\nlayar: "+screen.width+"x"+screen.height;
+
+  // ---- B: EIP-681 presets
+  const qr=[
+    ["B1 · ETH 0.001 ke burner-2 (native)","ethereum:"+B2+"@1?value=1e15"],
+    ["B2 · transfer USDC 1.0 ke burner-2 (ERC-20)","ethereum:"+USDC+"@1/transfer?address="+B2+"&uint256=1000000"],
+    ["B3 · transfer USDC 1.000.000 (format angka besar)","ethereum:"+USDC+"@1/transfer?address="+B2+"&uint256=1000000000000"]
+  ];
+  qr.forEach((q,i)=>{
+    const uri=q[1];
+    $("qrbox").insertAdjacentHTML("beforeend",
+      '<div class="mono">'+q[0]+"\n"+uri+'</div>'
+      +'<img class="qr" width="180" height="180" alt="QR '+i+'" src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=1&data='+encodeURIComponent(uri)+'">');
+  });
+
+  // ---- C: torture paste
+  const tor=[
+    ["C1 · alamat polos (baseline)",B2],
+    ["C2 · spasi di belakang",B2+" "],
+    ["C3 · newline di belakang",B2+"\n"],
+    ["C4 · zero-width space U+200B di belakang",B2+"\u200B"],
+    ["C5 · RTL-override U+202E di depan","\u202E"+B2],
+    ["C6 · checksum EIP-55 RUSAK (F terakhir → f, alamat valid tapi tanda tangan checksum salah)","0xc8CEe9dc9da67Af0eF121d7251aE8Fcaf28DBf"]
+  ];
+  tor.forEach(t=>{
+    const row=document.createElement("div");
+    row.innerHTML='<div class="note">'+t[0]+'</div><code>'+t[1].replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/ /g,"␣").replace(/\n/g,"⏎")+'</code>';
+    const b=document.createElement("button");b.textContent="COPY";
+    b.onclick=()=>cp(t[1],b);
+    row.appendChild(b);
+    $("tor").appendChild(row);
+  });
+
+  // ---- D: sign
+  async function akun(){const a=await eth.request({method:"eth_requestAccounts"});return a[0];}
+  async function psign(){
+    try{
+      const who=await akun();
+      const hex="0x"+[...new TextEncoder().encode("UJI-P4-ORIGIN")].map(x=>x.toString(16).padStart(2,"0")).join("");
+      const r=await eth.request({method:"personal_sign",params:[hex,who]});
+      $("dout").textContent="SIG: "+String(r).slice(0,30)+"… (POTRET lembar konfirmasi: origin/URL apa yang tertulis?)";
+    }catch(e){$("dout").textContent="ERR: "+String(e&&e.message||e).slice(0,160);}
+  }
+  async function esign(){
+    try{
+      const who=await akun();
+      const td={types:{EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}],Permit:[{name:"owner",type:"address"},{name:"spender",type:"address"},{name:"value",type:"uint256"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]},primaryType:"Permit",domain:{name:"USD Coin",version:"2",chainId:1,verifyingContract:USDC},message:{owner:who,spender:B2,value:"1000000",nonce:"0",deadline:"9999999999"}};
+      const r=await eth.request({method:"eth_signTypedData_v4",params:[who,JSON.stringify(td)]});
+      $("dout").textContent="SIG: "+String(r).slice(0,30)+"… (POTRET lembar konfirmasi: bagaimana 'Authorized asset' diformat di mobile?)";
+    }catch(e){$("dout").textContent="ERR: "+String(e&&e.message||e).slice(0,160);}
+  }
+  window.psign=psign;window.esign=esign;
+
+  // ---- E: iframe probe
+  window.muatIframe=function(){$("stat").textContent="status: iframe dimuat, menunggu laporan (tombol Ping kalau diam)…";$("f").src=$("frameUrl").value;};
+  window.kirimPing=function(){const w=$("f").contentWindow;if(w)w.postMessage({type:"ping"},"*");};
+  window.kirimConnect=function(){$("stat").textContent="status: perintah connect dikirim… (POTRET lembar wallet yang muncul)";const w=$("f").contentWindow;if(w)w.postMessage({type:"doConnect"},"*");};
+  window.addEventListener("message",e=>{
+    if(!e.data)return;
+    if(e.data.type==="provReport"){
+      $("stat").textContent="status: laporan iframe DITERIMA ✓";
+      const r=$("res").insertRow();
+      r.innerHTML="<td>"+e.data.href+"</td><td class='"+(e.data.ada?"bad":"ok")+"'>"+(e.data.ada?"ADA":"TIDAK ADA (aman)")+"</td><td>"+e.data.bitget+"</td>";
+    }
+    if(e.data.type==="connectResult"){$("stat").textContent="status: HASIL CONNECT → "+JSON.stringify(e.data.payload).slice(0,200);}
+  });
+  function bukaBitget(){location.href="bitkeep://dapp?url="+encodeURIComponent(location.href.split("#")[0]);}
+  window.bukaBitget=bukaBitget;
+}else{
+  const d=detect();
+  document.getElementById("inInfo").textContent="URL: "+d.href
+    +"\nprovider: "+(d.ada?"ADA (mobile MENGINJEKSI ke iframe!)":"TIDAK ADA (aman)")
+    +"\nflag Bitget: "+d.bitget;
+  report();setTimeout(report,800);setTimeout(report,2000);
+  window.addEventListener("message",e=>{
+    if(e.data&&e.data.type==="ping")report();
+    if(e.data&&e.data.type==="doConnect"){
+      if(!eth){try{parent.postMessage({type:"connectResult",payload:{provider:"absent"}},"*");}catch(x){}return;}
+      eth.request({method:"eth_requestAccounts"}).then(a=>{try{parent.postMessage({type:"connectResult",payload:{accounts:a}},"*");}catch(x){}})
+      .catch(err=>{try{parent.postMessage({type:"connectResult",payload:{error:String(err&&err.message||err).slice(0,140)}},"*");}catch(x){}});
+    }
+  });
+}
+
+function cp(txt,btn){
+  const done=()=>{btn.textContent="TERSALIN ✓";setTimeout(()=>btn.textContent="COPY",1200);};
+  const fb=()=>{const t=document.createElement("textarea");t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand("copy");done();}catch(e){btn.textContent="GAGAL—salin manual";}document.body.removeChild(t);};
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done).catch(fb);}else fb();
+}
+</script>
+</body>
+</html>
