@@ -3,84 +3,115 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>UJI KEAMANAN — Provider Injection Lab (Bitget Bounty)</title>
+<title>UJI KEAMANAN — Provider Injection Lab v2 (Bitget Bounty)</title>
 <style>
   body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:16px}
   .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:16px}
   h2{font-size:15px;margin:0 0 8px;color:#58a6ff}
   .warn{background:#3d1d1d;border:1px solid #f85149;color:#ffb3ad;padding:10px;border-radius:8px;font-size:13px;margin-bottom:16px}
-  .mono{font-family:ui-monospace,monospace;font-size:13px;word-break:break-all;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;margin:4px 0}
+  .mono{font-family:ui-monospace,monospace;font-size:13px;word-break:break-all;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;margin:4px 0;white-space:pre-wrap}
   input{width:100%;box-sizing:border-box;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:8px;font-family:ui-monospace,monospace;font-size:13px}
-  button{background:#238636;color:#fff;border:0;border-radius:6px;padding:8px 14px;margin-top:6px;font-weight:600;cursor:pointer}
-  table{width:100%;border-collapse:collapse;font-size:13px}
+  button{background:#238636;color:#fff;border:0;border-radius:6px;padding:8px 14px;margin-top:8px;font-weight:600;cursor:pointer}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
   td,th{border:1px solid #30363d;padding:6px;text-align:left}
-  iframe{width:100%;height:320px;border:1px dashed #30363d;margin-top:8px;border-radius:6px}
+  th{background:#161b22;color:#58a6ff}
+  iframe{width:100%;height:300px;border:1px dashed #30363d;margin-top:8px;border-radius:6px;background:#0d1117}
+  .ok{color:#3fb950}.bad{color:#f85149}
 </style>
 </head>
 <body>
-<div class="warn"><b>MODE GANDA:</b> file yang sama = ALAT (di tab atas) &amp; PROBE (di dalam iframe). Deploy file ini di DUA host berbeda (mis. github.io + Netlify Drop), lalu muat host-kedua ke iframe di bawah.</div>
+<div class="warn"><b>MODE GANDA:</b> file sama = ALAT (tab atas, github.io) &amp; PROBE (dalam iframe, netlify). Update di KEDUA host.</div>
 
-<div class="card">
-  <h2>A. DETEKSI TAB ATAS (origin utama)</h2>
-  <div class="mono" id="topInfo">memuat…</div>
+<!-- ===== SECTION TAB ATAS ===== -->
+<div id="topView">
+  <div class="card">
+    <h2>A. DETEKSI TAB ATAS</h2>
+    <div class="mono" id="topInfo">…</div>
+  </div>
+  <div class="card">
+    <h2>B. UJI IFRAME CROSS-ORIGIN</h2>
+    <input id="frameUrl" spellcheck="false" value="https://test-3-provider.netlify.app/">
+    <button onclick="muatIframe()">Muat iframe</button>
+    <button onclick="kirimPing()">Ping iframe</button>
+    <button onclick="kirimConnect()">1-KLIK: CONNECTKAN DARI IFRAME</button>
+    <div class="mono" id="stat">status: —</div>
+    <iframe id="f"></iframe>
+    <table id="res">
+      <tr><th>Origin iframe</th><th>provider</th><th>flag Bitget</th></tr>
+    </table>
+    <p style="font-size:13px;color:#8b949e">BACAAN: provider = TIDAK ADA → Bitget membatasi injeksi ke halaman atas (aman) → vektor NEGATIF, selesai. provider = ADA → klik tombol 1-KLIK di atas → popup muncul (cek juga taskbar!) → POTRET origin pada popup: github.io padahal request dari netlify = TEMUAN; netlify.app = jujur.</p>
+  </div>
 </div>
 
-<div class="card">
-  <h2>B. UJI INJEKSI KE IFRAME CROSS-ORIGIN</h2>
-  <input id="frameUrl" spellcheck=false value="https://GANTI-HOST-KEDUA.example/test-3-provider.html">
-  <button onclick="loadFrame()">Muat iframe</button>
-  <iframe id="f"></iframe>
-  <table id="res">
-    <tr><th>Origin iframe</th><th>window.ethereum</th><th>window.bitkeep / bitget</th><th>eth_requestAccounts (klik tombol di dalam iframe)</th></tr>
-    <tr><td>—</td><td>—</td><td>—</td><td>—</td></tr>
-  </table>
-  <p style="font-size:13px;color:#8b949e">PENTING (video ini): saat tombol CONNECT DI DALAM iframe ditekan — popup tanda tangan wallet menampilkan origin <b>halaman induk</b> atau <b>iframe</b>? Jika popup menampilkan domain induk padahal request dari iframe → approval-origin mismatch (High-classic).</p>
+<!-- ===== SECTION DALAM IFRAME ===== -->
+<div id="iframeView" style="display:none">
+  <div class="card">
+    <h2>MODE PROBE (saya di dalam iframe)</h2>
+    <div class="mono" id="inInfo">mengukur…</div>
+    <div class="mono" id="inRes">—</div>
+  </div>
 </div>
 
 <script>
 const $=id=>document.getElementById(id);
+const IS_TOP=(window.self===window.top);
 function detect(){
-  const eth=window.ethereum;
-  return {
-    href:location.href,
-    ethereum:!!eth,
-    isBitKeepFlag:!!(eth&&(eth.isBitKeep||eth.isBitgetWallet)),
-    bitkeep:typeof window.bitkeep!=="undefined",
-    bitgetWallet:typeof window.bitgetWallet!=="undefined"
-  };
+  const e=window.ethereum;
+  return {href:location.href,
+    ada:!!e,
+    bitget:!!(e&&(e.isBitKeep||e.isBitgetWallet))};
 }
-function render(d,el){
-  el.innerHTML="URL: "+d.href+"<br>ethereum: "+(d.ethereum?"<span class='ok'>ADA</span>":"tidak ada")+
-    " | isBitKeep: "+d.isBitKeepFlag+" | bitkeep: "+d.bitkeep+" | bitgetWallet: "+d.bitgetWallet;
+function fmt(d){
+  return "URL: "+d.href+"\nprovider(window.ethereum): "+(d.ada?"ADA ✔":"TIDAK ADA ✖")+"\nflag Bitget: "+d.bitget;
 }
-if(window.self===window.top){
-  render(detect(),$("topInfo"));
+function report(){ try{parent.postMessage({type:"provReport",...detect()},"*");}catch(e){} }
+if(IS_TOP){
+  $("iframeView").style.display="none";
+  $("topInfo").textContent=fmt(detect());
   window.addEventListener("message",e=>{
-    if(e.data&&e.data.type==="provReport"){
+    if(!e.data)return;
+    if(e.data.type==="provReport"){
+      $("stat").textContent="status: laporan iframe DITERIMA ✓";
       const r=$("res").insertRow();
-      r.innerHTML="<td class='mono'>"+e.data.href+"</td><td>"+(e.data.ethereum?"ADA ✔":"-")+"</td><td>"+
-        (e.data.bitkeep||e.data.bitgetWallet?"ADA ✔":(e.data.ethereum?"(flag umum)":"-"))+"</td><td id='connectCell'>—</td>";
-      window.__connectCell=r.cells[3];
+      r.innerHTML="<td>"+e.data.href+"</td><td class='"+(e.data.ada?"bad":"ok")+"'>"+(e.data.ada?"ADA":"TIDAK ADA (aman)")+"</td><td>"+e.data.bitget+"</td>";
     }
-    if(e.data&&e.data.type==="connectResult"&&window.__connectCell){
-      window.__connectCell.textContent=JSON.stringify(e.data.payload).slice(0,140);
+    if(e.data.type==="connectResult"){
+      $("stat").textContent="status: HASIL CONNECT → "+JSON.stringify(e.data.payload).slice(0,220);
     }
   });
-  function loadFrame(){$("f").src=$("frameUrl").value}
-}else{
-  // MODE PROBE (di dalam iframe): lapor ke induk
-  window.addEventListener("load",()=>{parent.postMessage({type:"provReport",...detect()},"*")});
-  function connectFromIframe(){
-    const eth=window.ethereum;
-    if(!eth)return parent.postMessage({type:"connectResult",payload:{error:"tidak ada provider di iframe"}},"*");
-    eth.request({method:"eth_requestAccounts"}).then(a=>
-      parent.postMessage({type:"connectResult",payload:{accounts:a,chain:window.ethereum.chainId}},"*")
-    ).catch(err=>
-      parent.postMessage({type:"connectResult",payload:{error:String(err&&err.message||err).slice(0,120)}},"*")
-    );
+  function muatIframe(){ $("stat").textContent="status: iframe dimuat, menunggu laporan (max 2 dtk; ada tombol Ping)…"; $("f").src=$("frameUrl").value; }
+  function kirimPing(){ const w=$("f").contentWindow; if(w)w.postMessage({type:"ping"},"*"); }
+  function kirimConnect(){
+    $("stat").textContent="status: perintah connect dikirim ke iframe… (popup bisa terbuka di belakang — cek taskbar)";
+    const w=$("f").contentWindow; if(w)w.postMessage({type:"doConnect"},"*");
   }
-  const b=document.createElement("button");b.textContent="CONNECT (dari iframe)";b.onclick=connectFromIframe;
-  document.body.appendChild(b);
+}else{
+  $("topView").style.display="none";
+  $("iframeView").style.display="block";
+  const d=detect();
+  $("inInfo").textContent=fmt(d)+"\n→ "+(d.ada?"provider ADA di iframe":"provider TIDAK diinjeksikan ke iframe (perilaku aman)");
+  report(); setTimeout(report,800);
+  window.addEventListener("message",e=>{
+    if(e.data&&e.data.type==="ping")report();
+    if(e.data&&e.data.type==="doConnect")connectNow();
+  });
+  function connectNow(){
+    const e=window.ethereum;
+    if(!e){
+      $("inRes").textContent="TIDAK ADA PROVIDER → tidak ada yang bisa di-connect (vektor aman).";
+      try{parent.postMessage({type:"connectResult",payload:{provider:"absent"}},"*");}catch(err){}
+      return;
+    }
+    $("inRes").textContent="provider ADA → eth_requestAccounts…";
+    e.request({method:"eth_requestAccounts"}).then(a=>{
+      $("inRes").textContent="CONNECTED: "+JSON.stringify(a).slice(0,120);
+      try{parent.postMessage({type:"connectResult",payload:{accounts:a}},"*");}catch(err){}
+    }).catch(err=>{
+      const m=String(err&&err.message||err).slice(0,140);
+      $("inRes").textContent="ERR: "+m;
+      try{parent.postMessage({type:"connectResult",payload:{error:m}},"*");}catch(e2){}
+    });
+  }
 }
 </script>
 </body>
