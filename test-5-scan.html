@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UJI KEAMANAN — Scanner Evasion Lab v1 (Bitget Bounty)</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:16px}
+  .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:16px}
+  h2{font-size:15px;margin:0 0 8px;color:#58a6ff}
+  .warn{background:#3d1d1d;border:1px solid #f85149;color:#ffb3ad;padding:10px;border-radius:8px;font-size:13px;margin-bottom:16px}
+  .mono{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;margin:4px 0;white-space:pre-wrap}
+  input{width:100%;box-sizing:border-box;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:8px;font-family:ui-monospace,monospace;font-size:13px;margin-bottom:6px}
+  button{background:#238636;color:#fff;border:0;border-radius:6px;padding:8px 12px;margin:4px 6px 0 0;font-weight:600;cursor:pointer;font-size:13px}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+  td,th{border:1px solid #30363d;padding:5px;text-align:left}
+  th{background:#161b22;color:#58a6ff}
+</style>
+</head>
+<body>
+<div class="warn"><b>WALLET BURNER.</b> Semua uji = TANDA TANGAN PESAN (tanpa biaya). CATAT di tabel bawah: untuk tiap T#, popup menampilkan banner MERAH "Risky address or contract" — YA / TIDAK. Varian yang seharusnya dicurigai tapi TANPA banner = kandidat temuan (scanner-evasion).</div>
+
+<div class="card">
+  <h2>0. HUBUNGKAN WALLET</h2>
+  <div class="mono" id="brand">WALLET TERDETEKSI: memuat…</div>
+  <button onclick="probe()">CONNECT</button>
+</div>
+
+<div class="card">
+  <h2>1. MATRIKS PROVOKASI (klik satu-satu, urut T0→T7, catat banner)</h2>
+  <label>Alamat burner-2 milikmu (sebagai "spender aman")</label>
+  <input id="safe" value="0x000000000000000000000000000000000000dEaD">
+  <button onclick="run('T0','baseline: spender dEaD checksum (HARUS banner)')">T0 baseline dEaD</button>
+  <button onclick="run('T1','evasion casing: spender dead lowercase semua')">T1 dead-lowercase</button>
+  <button onclick="run('T2','spender = zero address 0x000…000')">T2 zero-address</button>
+  <button onclick="run('T3','UNLIMITED value 2^256-1 + spender aman')">T3 unlimited+safe</button>
+  <button onclick="run('T4','UNLIMITED value + spender dEaD (dobel)')">T4 unlimited+dEaD</button>
+  <button onclick="run('T5','spender vanity/lookalike 0xC0FFEE…42')">T5 vanity-lookalike</button>
+  <button onclick="run('T6','domain.name "Uniswap V3" + spender dEaD (impersonation)')">T6 impers+dEaD</button>
+  <button onclick="run('T7','OWNER = 0x…dEaD (field owner dipindai?)')">T7 risky-owner</button>
+  <table id="tbl">
+    <tr><th>#</th><th>Varian</th><th>Popup muncul?</th><th>Banner RISKY?</th><th>Catatan</th></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>LOG / BUKTI</h2>
+  <div class="mono" id="log">—</div>
+  <button onclick="navigator.clipboard.writeText(document.getElementById('log').textContent)">Copy log</button>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const logBox=$("log");
+function log(s){logBox.textContent="["+new Date().toLocaleTimeString()+"] "+s+"\n"+logBox.textContent}
+async function eth(m,p){return window.ethereum.request({method:m,params:p})}
+function setBrand(){
+  const e=window.ethereum;
+  const b=!e?"TIDAK ADA PROVIDER":(e.isBitgetWallet||e.isBitKeep)?"BITGET WALLET ✔":e.isMetaMask?"METAMASK ✖":"LAIN";
+  $("brand").innerHTML="WALLET TERDETEKSI: <b class='"+(b.includes("BITGET")?"ok":"bad")+"'>"+b+"</b>";
+}
+async function probe(){
+  setBrand();
+  try{
+    let acc=await eth("eth_accounts").catch(()=>[]);
+    if(!acc.length)acc=await eth("eth_requestAccounts");
+    log("CONNECT: chainId="+await eth("eth_chainId")+" acc="+JSON.stringify(acc));
+  }catch(e){log("ERR "+e.message)}
+}
+const UNLIMITED="115792089237316195423570985008687907853269984665640564039457584007913129639935";
+function typed(name,spender,value,owner){
+  return {types:{
+    EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}],
+    Permit:[{name:"owner",type:"address"},{name:"spender",type:"address"},{name:"value",type:"uint256"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]
+  },primaryType:"Permit",
+  domain:{name:name,version:"1",chainId:1,verifyingContract:"0x000000000000000000000000000000000000dEaD"},
+  message:{owner:owner,spender:spender,value:value,nonce:0,deadline:9999999999}};
+}
+async function run(id,desc){
+  const safe=$("safe").value;
+  const D="0x000000000000000000000000000000000000dEaD";
+  const LOW="0x000000000000000000000000000000000000dead";
+  const ZERO="0x0000000000000000000000000000000000000000";
+  const VAN="0xC0FFEE0000000000000000000000000000000042";
+  let d;
+  switch(id){
+    case "T0": d=typed("TestLab",D,"1000000",safe);break;
+    case "T1": d=typed("TestLab",LOW,"1000000",safe);break;
+    case "T2": d=typed("TestLab",ZERO,"1000000",safe);break;
+    case "T3": d=typed("TestLab",safe,UNLIMITED,safe);break;
+    case "T4": d=typed("TestLab",D,UNLIMITED,safe);break;
+    case "T5": d=typed("TestLab",VAN,"1000000",safe);break;
+    case "T6": d=typed("Uniswap V3",D,"1000000",safe);break;
+    case "T7": d=typed("TestLab",safe,"1000000",D);break;
+  }
+  log(id+" ["+desc+"] dikirim…");
+  try{
+    const acc=await eth("eth_accounts").catch(()=>[]);
+    if(!acc.length){await eth("eth_requestAccounts");}
+    const sig=await eth("eth_signTypedData_v4",[(await eth("eth_accounts"))[0],JSON.stringify(d)]);
+    log(id+" SIGNED: "+sig.slice(0,26)+"… → CATAT banner popup: YA/TIDAK");
+  }catch(e){log(id+" ERR/ditolak: "+e.message)}
+  const r=$("tbl").insertRow();
+  r.innerHTML="<td>"+id+"</td><td>"+desc+"</td><td>…</td><td>YA / TIDAK ?</td><td></td>";
+  r.cells[2].contentEditable="true";r.cells[3].contentEditable="true";r.cells[4].contentEditable="true";
+}
+window.addEventListener("load",setBrand);
+</script>
+</body>
+</html>
