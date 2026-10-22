@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>UJI KEAMANAN — Banner Discriminator FINAL (Bitget Bounty)</title>
+<title>UJI — Boundary Map Permit-USDC (Bitget Bounty)</title>
 <style>
   body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:16px}
   .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:16px}
@@ -18,33 +18,31 @@
 </style>
 </head>
 <body>
-<div class="warn"><b>PERSYARATAN: switch jaringan wallet ke ETHEREUM MAINNET dulu (ikon jaringan di popup wallet).</b> Semua uji = tanda tangan saja (tanpa gas). R1 aman karena burner TIDAK punya saldo USDC dan spender = wallet-mu sendiri — tanda tangan itu tak bernilai apa-apa. JANGAN approve transaksi apa pun.</div>
-
+<div class="warn"><b>WALLET di ETHEREUM MAINNET, WALLET BURNER.</b> Semua = tanda tangan saja (tanpa gas; burner tak punya USDC; spender = walletmu sendiri → tanda tangan tak bernilai). Klik B1→B5 urut; catat SIGNED / FAILED per baris (edit kolom terakhir).</div>
 <div class="card">
-  <h2>0. HUBUNGKAN WALLET</h2>
+  <h2>0. HUBUNGKAN</h2>
   <div class="mono" id="brand">WALLET TERDETEKSI: memuat…</div>
   <button onclick="probe()">CONNECT</button>
   <div class="mono" id="net">—</div>
-  <label>Alamat burner-2 (spender "aman")</label>
+  <label>spender/owner (burner-2)</label>
   <input id="safe" value="0xc8CEe9dc9da67Af0eF121d7251aE8Fcaf28DBF">
 </div>
-
 <div class="card">
-  <h2>1. TIGA PEMBEDA PENENTU</h2>
-  <button onclick="runV('R1','USDC ASLI + MAX — banner hilang?')">R1 USDC-asli+MAX</button>
-  <button onclick="runV('R2','spender=owner=wallet — banner hilang?')">R2 spender=owner</button>
-  <button onclick="runV('R3','kontrol C0 ulang (sanity)')">R3 kontrol</button>
+  <h2>1. BATAS NILAI — USDC ASLI MAINNET</h2>
+  <button onclick="runV('B1','2^160-1 (pas di uint160)')">B1 2^160−1</button>
+  <button onclick="runV('B2','2^160 (lewat 1 bit)')">B2 2^160</button>
+  <button onclick="runV('B3','10^24 (1M USDC, wajar)')">B3 10^24</button>
+  <button onclick="runV('B4','2^256-2 (MAX-1)')">B4 MAX−1</button>
+  <button onclick="runV('B5','1.5e24 (1.5M USDC)')">B5 1.5e24</button>
   <table id="tbl">
-    <tr><th>#</th><th>Varian</th><th>Nama</th><th>Verifier</th><th>Spender</th><th>Value</th><th>Banner? (edit)</th></tr>
+    <tr><th>#</th><th>Nilai</th><th>Hasil (edit): SIGNED / FAILED</th></tr>
   </table>
 </div>
-
 <div class="card">
-  <h2>LOG / BUKTI</h2>
+  <h2>LOG</h2>
   <div class="mono" id="log">—</div>
   <button onclick="navigator.clipboard.writeText(document.getElementById('log').textContent)">Copy log</button>
 </div>
-
 <script>
 const $=id=>document.getElementById(id);
 const logBox=$("log");
@@ -64,35 +62,32 @@ async function probe(){
     ACC=acc[0];
     const hx=await eth("eth_chainId");
     CHAIN=parseInt(hx,16);
-    $("net").textContent="chainId="+hx+(hx==="0x1"?" (MAINNET ✓)":" (⚠ BUKAN mainnet — R1 tak sah, switch dulu!)")+"\nakun="+ACC;
+    $("net").textContent="chainId="+hx+(hx==="0x1"?" (MAINNET ✓)":" (⚠ switch ke mainnet dulu!)")+"\nakun="+ACC;
     log("CONNECT: chainId="+hx+" acc="+ACC);
   }catch(e){log("ERR "+e.message)}
 }
-const MAX="115792089237316195423570985008687907853269984665640564039457584007913129639935";
 const USDC="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
-function typed(name,ver,spe,val,own){
+const P2_160="1461501637330902918203684832716283019655932542975";
+const P2_160UP="1461501637330902918203684832716283019655932542976";
+const MAXM1="115792089237316195423570985008687907853269984665640564039457584007913129639934";
+function typed(val){
   return {types:{
     EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}],
     Permit:[{name:"owner",type:"address"},{name:"spender",type:"address"},{name:"value",type:"uint256"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]
   },primaryType:"Permit",
-  domain:{name:name,version:ver,chainId:CHAIN,verifyingContract:ver},
-  message:{owner:own,spender:spe,value:val,nonce:0,deadline:9999999999}};
+  domain:{name:"USD Coin",version:"2",chainId:CHAIN,verifyingContract:USDC},
+  message:{owner:ACC,spender:$("safe").value.trim(),value:val,nonce:0,deadline:9999999999}};
 }
-async function runV(id,desc){
-  const SAFE=$("safe").value.trim();
-  let name="TestLab",veri="1",ver=SAFE,spe=SAFE,val="1000000",own=ACC||SAFE;
-  if(id==="R1"){name="USD Coin";veri="2";ver=USDC;val=MAX;}
-  if(id==="R2"){spe=ACC||SAFE;}
-  const d=typed(name,veri,ver,spe,val,own);
-  log(id+" ["+desc+"] name=\""+name+"\" ver="+veri+" verifier="+ver+" spender="+spe+" value="+(val===MAX?"MAX":val));
+async function runV(id,val){
+  log(id+" value="+val+" dikirim…");
   try{
     if(!ACC)await probe();
-    const sig=await eth("eth_signTypedData_v4",[(await eth("eth_accounts"))[0],JSON.stringify(d)]);
-    log(id+" SIGNED: "+sig.slice(0,26)+"… → CATAT banner popup: YA/TIDAK");
-  }catch(e){log(id+" ERR/ditolak: "+e.message)}
+    const sig=await eth("eth_signTypedData_v4",[(await eth("eth_accounts"))[0],JSON.stringify(typed(val))]);
+    log(id+" SIGNED ✓: "+sig.slice(0,22)+"…");
+  }catch(e){log(id+" FAILED ✖: "+e.message)}
   const r=$("tbl").insertRow();
-  r.innerHTML="<td>"+id+"</td><td>"+desc+"</td><td>"+name+"</td><td>"+ver.slice(0,12)+"…</td><td>"+spe.slice(0,12)+"…</td><td>"+(val===MAX?"MAX":"normal")+"</td><td>YA / TIDAK ?</td>";
-  r.cells[6].contentEditable="true";
+  r.innerHTML="<td>"+id+"</td><td style='word-break:break-all'>"+val+"</td><td>SIGNED / FAILED ?</td>";
+  r.cells[2].contentEditable="true";
 }
 window.addEventListener("load",setBrand);
 </script>
