@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>UJI KEAMANAN — Signing Display Lab v3 (Bitget Bounty)</title>
+<title>UJI KEAMANAN — Signing Display Lab v4 (Bitget Bounty)</title>
 <style>
   body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:16px}
   .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:16px}
@@ -18,7 +18,7 @@
 </style>
 </head>
 <body>
-<div class="warn"><b>WALLET BURNER SAJA.</b> Video harus memotret popup wallet + panel payload dalam satu layar. Yang DITAMPILKAN wallet ≠ payload JSON di sini = temuan display-mismatch.</div>
+<div class="warn"><b>WALLET BURNER SAJA — JARINGAN MAINNET AKTIF: transaksi terakhir WAJIB di-REJECT (gas nyata). Tanda tangan teks/permit TIDAK ber biaya.</b></div>
 
 <div class="card">
   <h2>0. HUBUNGKAN WALLET</h2>
@@ -48,10 +48,10 @@ Detail: https://contoh-host-mu.example/withdraw-12.5-eth-confirm</textarea>
   <input id="tContract" value="0x000000000000000000000000000000000000dEaD">
   <div class="mono" id="tdJson">—</div>
   <button onclick="buildTyped()">Bangun payload</button>
-  <button onclick="signTypedAuto()">signTypedData_v4 (AUTO 2 format)</button>
-  <button onclick="signTypedV3Method()">CADANGAN: signTypedData_v3</button>
+  <button onclick="signV4Auto()">eth_signTypedData_v4 (AUTO 2 format)</button>
+  <button onclick="signV3Auto()">CADANGAN: eth_signTypedData_v3</button>
+  <button onclick="signLegacy()">CADANGAN TERAKHIR: eth_signTypedData</button>
   <div class="err" id="errbox"></div>
-  <p style="font-size:13px;color:#8b949e">Tombol AUTO mencoba format STRING dulu, lalu OBJECT — catat format mana yang memunculkan popup (ini data laporan: "request via string/object").</p>
 </div>
 
 <div class="card">
@@ -61,11 +61,11 @@ Detail: https://contoh-host-mu.example/withdraw-12.5-eth-confirm</textarea>
   <input id="cName" value="Ethereum Mainnet">
   <input id="cRpc" value="http://127.0.0.1:8545">
   <button onclick="addChain()">wallet_addEthereumChain</button>
-  <p style="font-size:13px;color:#8b949e">Setelah masuk: ulangi uji #2 di chain palsu ini — label popup masih "Ethereum Mainnet" polos tanpa badge "tidak dikenal"? = temuan.</p>
+  <p style="font-size:13px;color:#8b949e">Setelah masuk: ulangi uji #2 di chain palsu ini — popup masih menampilkan "Ethereum Mainnet" polos tanpa badge "tidak dikenal"? = temuan.</p>
 </div>
 
 <div class="card">
-  <h2>4. eth_sendTransaction — decoy, nilai 0, REJECT</h2>
+  <h2>4. eth_sendTransaction — decoy, nilai 0 — REJECT INI</h2>
   <label>ke (burner-2)</label>
   <input id="txTo" value="0x000000000000000000000000000000000000dEaD">
   <button onclick="sendTx()">eth_sendTransaction</button>
@@ -134,41 +134,48 @@ function buildTyped(){
   log("TYPED payload dibangun.");
   return d;
 }
-async function signTypedAuto(){
+async function signV4Auto(){
   hideErr();
   if(!window.__typed)buildTyped();
   const acc=await getAccount().catch(()=>[]);
   if(!acc.length)return showErr("belum connect — klik CONNECT dulu");
-  // COBA FORMAT 1: STRING (gaya MetaMask)
   try{
-    log("v4 coba format STRING…");
-    const sig=await eth("signTypedData_v4",[acc[0],window.__typed]);
-    log("BERHASIL via STRING. TYPED SIG: "+sig);
-    return;
-  }catch(e){log("gagal via STRING: "+e.message)}
-  // COBA FORMAT 2: OBJECT
+    log("eth_signTypedData_v4 coba format STRING…");
+    const sig=await eth("eth_signTypedData_v4",[acc[0],window.__typed]);
+    log("BERHASIL v4 STRING. SIG: "+sig);return;
+  }catch(e){log("gagal STRING: "+e.message)}
   try{
-    log("v4 coba format OBJECT…");
-    const sig=await eth("signTypedData_v4",[acc[0],JSON.parse(window.__typed)]);
-    log("BERHASIL via OBJECT. TYPED SIG: "+sig);
+    log("eth_signTypedData_v4 coba format OBJECT…");
+    const sig=await eth("eth_signTypedData_v4",[acc[0],JSON.parse(window.__typed)]);
+    log("BERHASIL v4 OBJECT. SIG: "+sig);
   }catch(e){showErr("v4 kedua format gagal: "+e.message)}
 }
-async function signTypedV3Method(){
+async function signV3Auto(){
   hideErr();
   if(!window.__typed)buildTyped();
   try{
     const acc=await getAccount();
-    log("v3 coba format STRING…");
-    const sig=await eth("signTypedData_v3",[acc[0],window.__typed]);
+    log("eth_signTypedData_v3 STRING…");
+    const sig=await eth("eth_signTypedData_v3",[acc[0],window.__typed]);
     log("BERHASIL v3 STRING. SIG: "+sig);
   }catch(e){
     try{
       const acc=await getAccount();
-      log("v3 coba format OBJECT…");
-      const sig=await eth("signTypedData_v3",[acc[0],JSON.parse(window.__typed)]);
+      log("eth_signTypedData_v3 OBJECT…");
+      const sig=await eth("eth_signTypedData_v3",[acc[0],JSON.parse(window.__typed)]);
       log("BERHASIL v3 OBJECT. SIG: "+sig);
     }catch(e2){showErr("v3 juga gagal: "+e2.message)}
   }
+}
+async function signLegacy(){
+  hideErr();
+  if(!window.__typed)buildTyped();
+  try{
+    const acc=await getAccount();
+    log("eth_signTypedData (legacy)…");
+    const sig=await eth("eth_signTypedData",[acc[0],window.__typed]);
+    log("BERHASIL legacy. SIG: "+sig);
+  }catch(e){showErr("legacy gagal: "+e.message)}
 }
 async function addChain(){
   hideErr();
@@ -186,7 +193,7 @@ async function sendTx(){
     const h=await eth("eth_sendTransaction",[{from:(await getAccount())[0],to:$("txTo").value,value:"0x0",data:"0xdeadbeef"}]);
     log("tx hash: "+h);
   }catch(e){
-    if(String(e.message).includes("User denied")||String(e).includes("4001"))log("tx DITOLAK user ✓ (bagian bukti)");
+    if(String(e.message).includes("denied")||String(e).includes("4001")||String(e.message).includes("reject"))log("tx DITOLAK user ✓ (bagian bukti)");
     else showErr("tx: "+e.message);
   }
 }
