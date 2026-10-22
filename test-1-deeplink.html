@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UJI KEAMANAN — Deep-link Lab (Bitget Bounty)</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:16px}
+  .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:16px}
+  h1{font-size:18px;margin:0 0 8px} h2{font-size:15px;margin:0 0 8px;color:#58a6ff}
+  .warn{background:#3d1d1d;border:1px solid #f85149;color:#ffb3ad;padding:10px;border-radius:8px;font-size:13px;margin-bottom:16px}
+  .mono{font-family:ui-monospace,Consolas,monospace;font-size:13px;word-break:break-all;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;margin:4px 0}
+  input{width:100%;box-sizing:border-box;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:8px;font-family:ui-monospace,monospace;font-size:13px}
+  button{background:#238636;color:#fff;border:0;border-radius:6px;padding:8px 14px;margin-top:6px;font-weight:600;cursor:pointer}
+  .row{margin-bottom:10px}
+  .ok{color:#3fb950}.bad{color:#f85149}
+</style>
+</head>
+<body>
+<div class="warn"><b>HALAMAN UJI KEAMANAN — Bitget Bug Bounty (BugEx).</b> Jangan isi alamat asli. Gunakan wallet burner. Semua aksi di sini untuk dokumentasi video laporan.</div>
+
+<div class="card">
+  <h2>1. KARTU IDENTITAS HALAMAN (ini yang divideo)</h2>
+  <div class="mono" id="realUrl">URL ASLI&nbsp;&nbsp;&nbsp;: …</div>
+  <div class="mono" id="realOrigin">ORIGIN ASLI&nbsp;: …</div>
+  <div class="mono" id="ref">REFERRER&nbsp;&nbsp;&nbsp;: …</div>
+  <div class="mono" id="ua">UA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: …</div>
+  <p style="font-size:13px;color:#8b949e">Jika aplikasi wallet membuka halaman ini tetapi <b>bar URL / judul app menampilkan domain ATAU nama lain</b> (mis. "PancakeSwap") → temuan origin-spoof. Video: buka halaman ini via deep-link, zoom bar URL app, lalu zoom kartu ini.</p>
+</div>
+
+<div class="card">
+  <h2>2. PELUNCUR DEEP-LINK (ganti {URL} otomatis jadi halaman ini)</h2>
+  <p style="font-size:13px;color:#8b949e">Isi template skema → tekan BUKA. Kalau satu skema gagal, catat, lanjut ke bawah. Uji dari KONTEKS LUAR browser juga (kirim link via email/WA ke dirimu sendiri, buka dari sana) — trigger dari luar adalah kondisi terkuat.</p>
+  <div id="launchers"></div>
+  <button onclick="addRow()">+ Tambah varian skema</button>
+</div>
+
+<div class="card">
+  <h2>3. CONTOH "JEBAKAN LABEL" (halaman target bertema palsu)</h2>
+  <p style="font-size:13px;color:#8b949e">Untuk membuktikan dampak: buat salinan file ini di host-mu dengan path bertema (gunakan nama netral milikmu, JANGAN brand orang lain di DOMENU) lalu bandingkan: apa yang ditampilkan app vs origin sebenarnya. Cukup tunjukkan mismatch label.</p>
+</div>
+
+<div class="card">
+  <h2>4. LOG UJI</h2>
+  <div class="mono" id="log">—</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+$("realUrl").textContent   = "URL ASLI    : " + location.href;
+$("realOrigin").textContent= "ORIGIN ASLI : " + location.origin;
+$("ref").textContent       = "REFERRER    : " + (document.referrer||"(kosong)");
+$("ua").textContent        = "UA          : " + navigator.userAgent.slice(0,90)+"…";
+
+const DEFAULTS=[
+  "bitkeep://dapp?url={URL}",
+  "bitkeep://webview?url={URL}",
+  "bitget://dapp?url={URL}",
+  "bkapp://dapp?url={URL}",
+  "bitkeep://?url={URL}",
+  "{URL}"
+];
+function addRow(v){
+  const d=document.createElement("div"); d.className="row";
+  const i=document.createElement("input"); i.value=v||"skema://jalur?url={URL}"; i.spellcheck=false;
+  const b=document.createElement("button"); b.textContent="BUKA";
+  b.onclick=()=>go(i.value);
+  d.appendChild(i); d.appendChild(b); $("launchers").appendChild(d);
+}
+function go(tpl){
+  const target=tpl.includes("{URL}")
+    ? tpl.replace("{URL}", encodeURIComponent(location.href))
+    : tpl;
+  log("Coba buka: "+target);
+  location.href=target;
+}
+function log(s){$("log").textContent = s+"\n"+$("log").textContent}
+DEFAULTS.forEach(addRow);
+log("Siap. Buka halaman ini dari app lain utk uji trigger luar.");
+</script>
+</body>
+</html>
