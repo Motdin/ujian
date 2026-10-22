@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>UJI KEAMANAN — Scanner Evasion Lab v1 (Bitget Bounty)</title>
+<title>UJI KEAMANAN — Scanner Evasion Lab v2 (Bitget Bounty)</title>
 <style>
   body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:16px}
   .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:16px}
@@ -18,28 +18,33 @@
 </style>
 </head>
 <body>
-<div class="warn"><b>WALLET BURNER.</b> Semua uji = TANDA TANGAN PESAN (tanpa biaya). CATAT di tabel bawah: untuk tiap T#, popup menampilkan banner MERAH "Risky address or contract" — YA / TIDAK. Varian yang seharusnya dicurigai tapi TANPA banner = kandidat temuan (scanner-evasion).</div>
+<div class="warn"><b>WALLET BURNER — semua uji tanda tangan pesan (tanpa biaya).</b> Urutan wajib: C0 DULU (kontrol harus TANPA banner; kalau C0 dapat banner, semua hasil batal — kabari). Lalu V1→V7: catat banner MERAH YA/TIDAK per varian. Satu varian yang SEHARUSNYA dicurigai tapi TANPA banner = kandidat temuan scanner-evasion.</div>
 
 <div class="card">
   <h2>0. HUBUNGKAN WALLET</h2>
   <div class="mono" id="brand">WALLET TERDETEKSI: memuat…</div>
   <button onclick="probe()">CONNECT</button>
+  <div class="mono" id="net">—</div>
 </div>
 
 <div class="card">
-  <h2>1. MATRIKS PROVOKASI (klik satu-satu, urut T0→T7, catat banner)</h2>
-  <label>Alamat burner-2 milikmu (sebagai "spender aman")</label>
-  <input id="safe" value="0x000000000000000000000000000000000000dEaD">
-  <button onclick="run('T0','baseline: spender dEaD checksum (HARUS banner)')">T0 baseline dEaD</button>
-  <button onclick="run('T1','evasion casing: spender dead lowercase semua')">T1 dead-lowercase</button>
-  <button onclick="run('T2','spender = zero address 0x000…000')">T2 zero-address</button>
-  <button onclick="run('T3','UNLIMITED value 2^256-1 + spender aman')">T3 unlimited+safe</button>
-  <button onclick="run('T4','UNLIMITED value + spender dEaD (dobel)')">T4 unlimited+dEaD</button>
-  <button onclick="run('T5','spender vanity/lookalike 0xC0FFEE…42')">T5 vanity-lookalike</button>
-  <button onclick="run('T6','domain.name "Uniswap V3" + spender dEaD (impersonation)')">T6 impers+dEaD</button>
-  <button onclick="run('T7','OWNER = 0x…dEaD (field owner dipindai?)')">T7 risky-owner</button>
+  <h2>1. ALAMAT AMAN (isi burner-2 milikmu)</h2>
+  <input id="safe" value="0xc8CEe9dc9da67Af0eF121d7251aE8Fcaf28DBF">
+  <label>Alamat ini dipakai sbg spender/verifyingContract/owner pada varian BERSIH. Satu field diganti per varian.</label>
+</div>
+
+<div class="card">
+  <h2>2. MATRIKS TERISOLASI (klik urut C0→V7)</h2>
+  <button onclick="runV('C0','kontrol SEMUA bersih')">C0 kontrol</button>
+  <button onclick="runV('V1','hanya domain=dEaD')">V1 domain-dEaD</button>
+  <button onclick="runV('V2','hanya value=MAX domain bersih')">V2 value-MAX</button>
+  <button onclick="runV('V3','hanya spender=zero')">V3 spender-zero</button>
+  <button onclick="runV('V4','hanya spender vanity C0FFEE42')">V4 vanity</button>
+  <button onclick="runV('V5','hanya nama brand semua bersih')">V5 nama-brand</button>
+  <button onclick="runV('V6','nama brand + domain dEaD')">V6 nama+dEaD</button>
+  <button onclick="runV('V7','hanya owner=dEaD')">V7 owner-dEaD</button>
   <table id="tbl">
-    <tr><th>#</th><th>Varian</th><th>Popup muncul?</th><th>Banner RISKY?</th><th>Catatan</th></tr>
+    <tr><th>#</th><th>Varian</th><th>Domain.verifier</th><th>Spender</th><th>Owner</th><th>Value</th><th>Banner RISKY? (edit)</th></tr>
   </table>
 </div>
 
@@ -54,6 +59,7 @@ const $=id=>document.getElementById(id);
 const logBox=$("log");
 function log(s){logBox.textContent="["+new Date().toLocaleTimeString()+"] "+s+"\n"+logBox.textContent}
 async function eth(m,p){return window.ethereum.request({method:m,params:p})}
+let CHAIN=1, ACC=null;
 function setBrand(){
   const e=window.ethereum;
   const b=!e?"TIDAK ADA PROVIDER":(e.isBitgetWallet||e.isBitKeep)?"BITGET WALLET ✔":e.isMetaMask?"METAMASK ✖":"LAIN";
@@ -64,45 +70,48 @@ async function probe(){
   try{
     let acc=await eth("eth_accounts").catch(()=>[]);
     if(!acc.length)acc=await eth("eth_requestAccounts");
-    log("CONNECT: chainId="+await eth("eth_chainId")+" acc="+JSON.stringify(acc));
+    ACC=acc[0];
+    const hx=await eth("eth_chainId");
+    CHAIN=parseInt(hx,16);
+    $("net").textContent="chainId="+hx+" ("+CHAIN+")\nakun="+ACC;
+    log("CONNECT: chainId="+hx+" acc="+ACC);
   }catch(e){log("ERR "+e.message)}
 }
-const UNLIMITED="115792089237316195423570985008687907853269984665640564039457584007913129639935";
-function typed(name,spender,value,owner){
+const MAX="115792089237316195423570985008687907853269984665640564039457584007913129639935";
+const D="0x000000000000000000000000000000000000dEaD";
+const ZERO="0x0000000000000000000000000000000000000000";
+const VAN="0xC0FFEE0000000000000000000000000000000042";
+function typed(name,verifier,spender,value,owner){
   return {types:{
     EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}],
     Permit:[{name:"owner",type:"address"},{name:"spender",type:"address"},{name:"value",type:"uint256"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]
   },primaryType:"Permit",
-  domain:{name:name,version:"1",chainId:1,verifyingContract:"0x000000000000000000000000000000000000dEaD"},
+  domain:{name:name,version:"1",chainId:CHAIN,verifyingContract:verifier},
   message:{owner:owner,spender:spender,value:value,nonce:0,deadline:9999999999}};
 }
-async function run(id,desc){
-  const safe=$("safe").value;
-  const D="0x000000000000000000000000000000000000dEaD";
-  const LOW="0x000000000000000000000000000000000000dead";
-  const ZERO="0x0000000000000000000000000000000000000000";
-  const VAN="0xC0FFEE0000000000000000000000000000000042";
-  let d;
+async function runV(id,desc){
+  const SAFE=$("safe").value.trim();
+  let name="TestLab",ver=SAFE,spe=SAFE,val="1000000",own=ACC||SAFE,tag="";
   switch(id){
-    case "T0": d=typed("TestLab",D,"1000000",safe);break;
-    case "T1": d=typed("TestLab",LOW,"1000000",safe);break;
-    case "T2": d=typed("TestLab",ZERO,"1000000",safe);break;
-    case "T3": d=typed("TestLab",safe,UNLIMITED,safe);break;
-    case "T4": d=typed("TestLab",D,UNLIMITED,safe);break;
-    case "T5": d=typed("TestLab",VAN,"1000000",safe);break;
-    case "T6": d=typed("Uniswap V3",D,"1000000",safe);break;
-    case "T7": d=typed("TestLab",safe,"1000000",D);break;
+    case "V1": ver=D;tag="domain=dEaD";break;
+    case "V2": val=MAX;tag="value=MAX";break;
+    case "V3": spe=ZERO;tag="spender=zero";break;
+    case "V4": spe=VAN;tag="spender=vanity";break;
+    case "V5": name="Uniswap V3";tag="nama=brand";break;
+    case "V6": name="Uniswap V3";ver=D;tag="nama+domain-dEaD";break;
+    case "V7": own=D;tag="owner=dEaD";break;
+    default: tag="kontrol";
   }
-  log(id+" ["+desc+"] dikirim…");
+  const d=typed(name,ver,spe,val,own);
+  log(id+" ["+desc+"] dikirim… domain.ver="+ver+" spender="+spe+" owner="+own.slice(0,10)+"… value="+val.slice(0,12)+(val.length>12?"…":""));
   try{
-    const acc=await eth("eth_accounts").catch(()=>[]);
-    if(!acc.length){await eth("eth_requestAccounts");}
+    if(!ACC){await probe();}
     const sig=await eth("eth_signTypedData_v4",[(await eth("eth_accounts"))[0],JSON.stringify(d)]);
-    log(id+" SIGNED: "+sig.slice(0,26)+"… → CATAT banner popup: YA/TIDAK");
+    log(id+" SIGNED: "+sig.slice(0,26)+"… → CATAT banner: YA/TIDAK");
   }catch(e){log(id+" ERR/ditolak: "+e.message)}
   const r=$("tbl").insertRow();
-  r.innerHTML="<td>"+id+"</td><td>"+desc+"</td><td>…</td><td>YA / TIDAK ?</td><td></td>";
-  r.cells[2].contentEditable="true";r.cells[3].contentEditable="true";r.cells[4].contentEditable="true";
+  r.innerHTML="<td>"+id+"</td><td>"+tag+"</td><td>"+ver.slice(0,10)+"…</td><td>"+spe.slice(0,10)+"…</td><td>"+own.slice(0,10)+"…</td><td>"+(val===MAX?"MAX":"normal")+"</td><td>YA / TIDAK ?</td>";
+  r.cells[6].contentEditable="true";
 }
 window.addEventListener("load",setBrand);
 </script>
