@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UJI KEAMANAN — Banner Discriminator FINAL (Bitget Bounty)</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:16px}
+  .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:16px}
+  h2{font-size:15px;margin:0 0 8px;color:#58a6ff}
+  .warn{background:#3d1d1d;border:1px solid #f85149;color:#ffb3ad;padding:10px;border-radius:8px;font-size:13px;margin-bottom:16px}
+  .mono{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;margin:4px 0;white-space:pre-wrap}
+  input{width:100%;box-sizing:border-box;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:8px;font-family:ui-monospace,monospace;font-size:13px;margin-bottom:6px}
+  button{background:#238636;color:#fff;border:0;border-radius:6px;padding:8px 12px;margin:4px 6px 0 0;font-weight:600;cursor:pointer}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+  td,th{border:1px solid #30363d;padding:5px;text-align:left}
+  th{background:#161b22;color:#58a6ff}
+</style>
+</head>
+<body>
+<div class="warn"><b>PERSYARATAN: switch jaringan wallet ke ETHEREUM MAINNET dulu (ikon jaringan di popup wallet).</b> Semua uji = tanda tangan saja (tanpa gas). R1 aman karena burner TIDAK punya saldo USDC dan spender = wallet-mu sendiri — tanda tangan itu tak bernilai apa-apa. JANGAN approve transaksi apa pun.</div>
+
+<div class="card">
+  <h2>0. HUBUNGKAN WALLET</h2>
+  <div class="mono" id="brand">WALLET TERDETEKSI: memuat…</div>
+  <button onclick="probe()">CONNECT</button>
+  <div class="mono" id="net">—</div>
+  <label>Alamat burner-2 (spender "aman")</label>
+  <input id="safe" value="0xc8CEe9dc9da67Af0eF121d7251aE8Fcaf28DBF">
+</div>
+
+<div class="card">
+  <h2>1. TIGA PEMBEDA PENENTU</h2>
+  <button onclick="runV('R1','USDC ASLI + MAX — banner hilang?')">R1 USDC-asli+MAX</button>
+  <button onclick="runV('R2','spender=owner=wallet — banner hilang?')">R2 spender=owner</button>
+  <button onclick="runV('R3','kontrol C0 ulang (sanity)')">R3 kontrol</button>
+  <table id="tbl">
+    <tr><th>#</th><th>Varian</th><th>Nama</th><th>Verifier</th><th>Spender</th><th>Value</th><th>Banner? (edit)</th></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>LOG / BUKTI</h2>
+  <div class="mono" id="log">—</div>
+  <button onclick="navigator.clipboard.writeText(document.getElementById('log').textContent)">Copy log</button>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const logBox=$("log");
+function log(s){logBox.textContent="["+new Date().toLocaleTimeString()+"] "+s+"\n"+logBox.textContent}
+async function eth(m,p){return window.ethereum.request({method:m,params:p})}
+let CHAIN=1, ACC=null;
+function setBrand(){
+  const e=window.ethereum;
+  const b=!e?"TIDAK ADA PROVIDER":(e.isBitgetWallet||e.isBitKeep)?"BITGET WALLET ✔":e.isMetaMask?"METAMASK ✖":"LAIN";
+  $("brand").innerHTML="WALLET TERDETEKSI: <b class='"+(b.includes("BITGET")?"ok":"bad")+"'>"+b+"</b>";
+}
+async function probe(){
+  setBrand();
+  try{
+    let acc=await eth("eth_accounts").catch(()=>[]);
+    if(!acc.length)acc=await eth("eth_requestAccounts");
+    ACC=acc[0];
+    const hx=await eth("eth_chainId");
+    CHAIN=parseInt(hx,16);
+    $("net").textContent="chainId="+hx+(hx==="0x1"?" (MAINNET ✓)":" (⚠ BUKAN mainnet — R1 tak sah, switch dulu!)")+"\nakun="+ACC;
+    log("CONNECT: chainId="+hx+" acc="+ACC);
+  }catch(e){log("ERR "+e.message)}
+}
+const MAX="115792089237316195423570985008687907853269984665640564039457584007913129639935";
+const USDC="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+function typed(name,ver,spe,val,own){
+  return {types:{
+    EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}],
+    Permit:[{name:"owner",type:"address"},{name:"spender",type:"address"},{name:"value",type:"uint256"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]
+  },primaryType:"Permit",
+  domain:{name:name,version:ver,chainId:CHAIN,verifyingContract:ver},
+  message:{owner:own,spender:spe,value:val,nonce:0,deadline:9999999999}};
+}
+async function runV(id,desc){
+  const SAFE=$("safe").value.trim();
+  let name="TestLab",veri="1",ver=SAFE,spe=SAFE,val="1000000",own=ACC||SAFE;
+  if(id==="R1"){name="USD Coin";veri="2";ver=USDC;val=MAX;}
+  if(id==="R2"){spe=ACC||SAFE;}
+  const d=typed(name,veri,ver,spe,val,own);
+  log(id+" ["+desc+"] name=\""+name+"\" ver="+veri+" verifier="+ver+" spender="+spe+" value="+(val===MAX?"MAX":val));
+  try{
+    if(!ACC)await probe();
+    const sig=await eth("eth_signTypedData_v4",[(await eth("eth_accounts"))[0],JSON.stringify(d)]);
+    log(id+" SIGNED: "+sig.slice(0,26)+"… → CATAT banner popup: YA/TIDAK");
+  }catch(e){log(id+" ERR/ditolak: "+e.message)}
+  const r=$("tbl").insertRow();
+  r.innerHTML="<td>"+id+"</td><td>"+desc+"</td><td>"+name+"</td><td>"+ver.slice(0,12)+"…</td><td>"+spe.slice(0,12)+"…</td><td>"+(val===MAX?"MAX":"normal")+"</td><td>YA / TIDAK ?</td>";
+  r.cells[6].contentEditable="true";
+}
+window.addEventListener("load",setBrand);
+</script>
+</body>
+</html>
