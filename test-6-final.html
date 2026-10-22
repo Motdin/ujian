@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>UJI — Boundary Map Permit-USDC (Bitget Bounty)</title>
+<title>UJI — Boundary Map v2 Permit-USDC (Bitget Bounty)</title>
 <style>
   body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:16px}
   .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:16px}
@@ -18,7 +18,7 @@
 </style>
 </head>
 <body>
-<div class="warn"><b>WALLET di ETHEREUM MAINNET, WALLET BURNER.</b> Semua = tanda tangan saja (tanpa gas; burner tak punya USDC; spender = walletmu sendiri → tanda tangan tak bernilai). Klik B1→B5 urut; catat SIGNED / FAILED per baris (edit kolom terakhir).</div>
+<div class="warn"><b>WALLET di ETHEREUM MAINNET, WALLET BURNER.</b> Klik B0 DULU (harus GAGAL = reproduksi temuan). Lalu B1→B5. Semua tanda tangan saja (tanpa gas). Catat SIGNED/FAILED di kolom terakhir (klik-edit).</div>
 <div class="card">
   <h2>0. HUBUNGKAN</h2>
   <div class="mono" id="brand">WALLET TERDETEKSI: memuat…</div>
@@ -28,14 +28,15 @@
   <input id="safe" value="0xc8CEe9dc9da67Af0eF121d7251aE8Fcaf28DBF">
 </div>
 <div class="card">
-  <h2>1. BATAS NILAI — USDC ASLI MAINNET</h2>
-  <button onclick="runV('B1','2^160-1 (pas di uint160)')">B1 2^160−1</button>
-  <button onclick="runV('B2','2^160 (lewat 1 bit)')">B2 2^160</button>
-  <button onclick="runV('B3','10^24 (1M USDC, wajar)')">B3 10^24</button>
-  <button onclick="runV('B4','2^256-2 (MAX-1)')">B4 MAX−1</button>
-  <button onclick="runV('B5','1.5e24 (1.5M USDC)')">B5 1.5e24</button>
+  <h2>1. BATAS NILAI — USDC ASLI MAINNET (angka asli)</h2>
+  <button onclick="runV('B0')">B0 MAX (repro)</button>
+  <button onclick="runV('B1')">B1 2^160−1</button>
+  <button onclick="runV('B2')">B2 2^160</button>
+  <button onclick="runV('B3')">B3 10^24</button>
+  <button onclick="runV('B4')">B4 MAX−1</button>
+  <button onclick="runV('B5')">B5 2^200</button>
   <table id="tbl">
-    <tr><th>#</th><th>Nilai</th><th>Hasil (edit): SIGNED / FAILED</th></tr>
+    <tr><th>#</th><th>Nilai</th><th>Bit</th><th>Hasil (edit)</th></tr>
   </table>
 </div>
 <div class="card">
@@ -66,10 +67,16 @@ async function probe(){
     log("CONNECT: chainId="+hx+" acc="+ACC);
   }catch(e){log("ERR "+e.message)}
 }
+const V={
+  B0:"115792089237316195423570985008687907853269984665640564039457584007913129639935",
+  B1:"1461501637330902918203684832716283019655932542975",
+  B2:"1461501637330902918203684832716283019655932542976",
+  B3:"1000000000000000000000000",
+  B4:"115792089237316195423570985008687907853269984665640564039457584007913129639934",
+  B5:"1606938044258990275541962092341162602522202993782792835301376"
+};
+const BITS={B0:"256",B1:"160",B2:"160+1",B3:"≈80",B4:"256",B5:"200"};
 const USDC="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
-const P2_160="1461501637330902918203684832716283019655932542975";
-const P2_160UP="1461501637330902918203684832716283019655932542976";
-const MAXM1="115792089237316195423570985008687907853269984665640564039457584007913129639934";
 function typed(val){
   return {types:{
     EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}],
@@ -78,16 +85,17 @@ function typed(val){
   domain:{name:"USD Coin",version:"2",chainId:CHAIN,verifyingContract:USDC},
   message:{owner:ACC,spender:$("safe").value.trim(),value:val,nonce:0,deadline:9999999999}};
 }
-async function runV(id,val){
-  log(id+" value="+val+" dikirim…");
+async function runV(id){
+  const val=V[id];
+  log(id+" value("+val.length+" digit) dikirim…");
   try{
     if(!ACC)await probe();
     const sig=await eth("eth_signTypedData_v4",[(await eth("eth_accounts"))[0],JSON.stringify(typed(val))]);
     log(id+" SIGNED ✓: "+sig.slice(0,22)+"…");
   }catch(e){log(id+" FAILED ✖: "+e.message)}
   const r=$("tbl").insertRow();
-  r.innerHTML="<td>"+id+"</td><td style='word-break:break-all'>"+val+"</td><td>SIGNED / FAILED ?</td>";
-  r.cells[2].contentEditable="true";
+  r.innerHTML="<td>"+id+"</td><td style='word-break:break-all'>"+val+"</td><td>"+BITS[id]+"</td><td>SIGNED / FAILED ?</td>";
+  r.cells[3].contentEditable="true";
 }
 window.addEventListener("load",setBrand);
 </script>
