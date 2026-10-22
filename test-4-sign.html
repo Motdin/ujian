@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UJI KEAMANAN — Signing Display Lab (Bitget Bounty)</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:16px}
+  .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:16px}
+  h2{font-size:15px;margin:0 0 8px;color:#58a6ff}
+  .warn{background:#3d1d1d;border:1px solid #f85149;color:#ffb3ad;padding:10px;border-radius:8px;font-size:13px;margin-bottom:16px}
+  .mono{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;margin:4px 0;white-space:pre-wrap}
+  input,textarea{width:100%;box-sizing:border-box;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:8px;font-family:ui-monospace,monospace;font-size:13px;margin-bottom:6px}
+  button{background:#238636;color:#fff;border:0;border-radius:6px;padding:8px 14px;margin:6px 6px 0 0;font-weight:600;cursor:pointer}
+  label{font-size:12px;color:#8b949e}
+  .ok{color:#3fb950}.bad{color:#f85149}
+</style>
+</head>
+<body>
+<div class="warn"><b>WALLET BURNER SAJA.</b> Setiap tombol menampilkan payload ASLI yang ditandatangani — video harus memotret popup wallet + panel payload dalam satu layar. Bandingkan: apa yang DITAMPILKAN wallet ≠ payload JSON di sini = temuan display-mismatch.</div>
+
+<div class="card">
+  <h2>0. Koneksi & jaringan</h2>
+  <button onclick="probe()">eth_chainId + accounts</button>
+  <div class="mono" id="net">—</div>
+</div>
+
+<div class="card">
+  <h2>1. personal_sign — uji pemotongan & homoglyph</h2>
+  <textarea id="msg" rows="4">Withdraw 12.5 ETH to vault.
+Recovery contact: admin@uniѕwap.finance   (huruf "s" di sini CYRILLIC ѕ)
+Ref: 0000000000000000000000000000000000000000000000000000000000000ABCD
+Detail: https://contoh-host-mu.example/withdraw-12.5-eth-confirm</textarea>
+  <label>Pesan di atas sengaja mengandung homoglyph & baris panjang. Kalau popup menampilkan "uniѕwap" terlihat seperti "uniswap", atau teks terpotong tanpa "…", itu temuan.</label><br>
+  <button onclick="personalSign()">personal_sign</button>
+</div>
+
+<div class="card">
+  <h2>2. EIP-712 permit — nilai raksasa & nama domain menipu</h2>
+  <label>Nama token/protokol di pesan (boleh diganti)</label>
+  <input id="tName" value="Uniswap V3">
+  <label>VALUE (wei) — default = 2^96-1 (alias "unlimited" di kebanyakan UI)</label>
+  <input id="tVal" value="79228162514264337593543950335">
+  <label>spender (address burner-2 milikmu)</label>
+  <input id="tSpender" value="0x000000000000000000000000000000000000dEaD">
+  <label>verifyingContract (token burner, BEBAS — jangan alamat token nyata orang)</label>
+  <input id="tContract" value="0x000000000000000000000000000000000000dEaD">
+  <div class="mono" id="tdJson">—</div>
+  <button onclick="buildTyped()">Bangun payload</button>
+  <button onclick="signTyped()">signTypedData_v4</button>
+</div>
+
+<div class="card">
+  <h2>3. wallet_addEthereumChain — chain tiruan bernama "Ethereum Mainnet"</h2>
+  <label>chainId (harus beda dari yang sudah ada; default 0x424242)</label>
+  <input id="cId" value="0x424242">
+  <input id="cName" value="Ethereum Mainnet">
+  <input id="cRpc" value="http://127.0.0.1:8545">
+  <button onclick="addChain()">wallet_addEthereumChain</button>
+  <p style="font-size:13px;color:#8b949e">Setelah ditambah: ulangi uji #2 di chain tiruan itu. Kalau wallet tetap menampilkan "Ethereum Mainnet" tanpa badge "tidak dikenal/test" saat menandatangani → temuan.</p>
+</div>
+
+<div class="card">
+  <h2>4. eth_sendTransaction — decoy data, nilai 0, ke diri sendiri</h2>
+  <label>ke (address burner-2)</label>
+  <input id="txTo" value="0x000000000000000000000000000000000000dEaD">
+  <button onclick="sendTx()">eth_sendTransaction</button>
+</div>
+
+<div class="card">
+  <h2>LOG / BUKTI (copy untuk laporan)</h2>
+  <div class="mono" id="log">—</div>
+  <button onclick="navigator.clipboard.writeText(document.getElementById('log').textContent)">Copy log</button>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const logBox=$("log");
+function log(s){logBox.textContent="["+new Date().toLocaleTimeString()+"] "+s+"\n"+logBox.textContent}
+async function eth(m,p){return window.ethereum.request({method:m,params:p})}
+async function probe(){
+  try{
+    const cid=await eth("eth_chainId");const acc=await eth("eth_accounts");
+    $("net").textContent="chainId="+cid+" accounts="+JSON.stringify(acc);
+    log("chainId="+cid+" acc="+JSON.stringify(acc));
+  }catch(e){$("net").textContent="ERR "+e.message;log("probe ERR "+e.message)}
+}
+async function personalSign(){
+  const msg=$("msg").value;
+  log("personal_sign RAW MSG:\n"+JSON.stringify(msg));
+  try{
+    const acc=await eth("eth_accounts");
+    const sig=await eth("personal_sign",[toHex(msg),acc[0]]);
+    log("SIG: "+sig);
+  }catch(e){log("sign ERR "+e.message)}
+}
+function toHex(s){return "0x"+Array.from(new TextEncoder().encode(s)).map(b=>b.toString(16).padStart(2,"0")).join("")}
+function buildTyped(){
+  const d={
+    types:{
+      EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}],
+      Permit:[{name:"owner",type:"address"},{name:"spender",type:"address"},{name:"value",type:"uint256"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]
+    },
+    primaryType:"Permit",
+    domain:{name:$("tName").value,version:"1",chainId:1,verifyingContract:$("tContract").value},
+    message:{owner:"0x0000000000000000000000000000000000000000",spender:$("tSpender").value,value:$("tVal").value,nonce:0,deadline:9999999999}
+  };
+  $("tdJson").textContent=JSON.stringify(d,null,1);
+  window.__typed=JSON.stringify(d);
+  log("TYPED payload dibangun (lihat panel).");
+}
+async function signTyped(){
+  if(!window.__typed)buildTyped();
+  try{
+    const acc=await eth("eth_accounts");
+    const sig=await eth("signTypedData_v4",[acc[0],window.__typed]);
+    log("TYPED SIG: "+sig);
+  }catch(e){log("typed ERR "+e.message)}
+}
+async function addChain(){
+  try{
+    await eth("wallet_addEthereumChain",[{
+      chainId:$("cId").value,chainName:$("cName").value,
+      rpcUrls:[$("cRpc").value],nativeCurrency:{name:"ETH",symbol:"ETH",decimals:18},
+      blockExplorerUrls:["https://etherscan.io"]}]);
+    log("addChain OK — chain tiruan terpasang. Lanjut uji #2 di chain ini.");
+  }catch(e){log("addChain ERR "+e.message)}
+}
+async function sendTx(){
+  try{
+    const h=await eth("eth_sendTransaction",[{from:(await eth("eth_accounts"))[0],to:$("txTo").value,value:"0x0",data:"0xdeadbeef"}]);
+    log("tx hash: "+h);
+  }catch(e){log("tx ERR "+e.message)}
+}
+</script>
+</body>
+</html>
