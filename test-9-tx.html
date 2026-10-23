@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UJI KEAMANAN — P7 TX-Decode Display Lab v1 (Bitget Bounty)</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:14px}
+  .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-bottom:14px}
+  h2{font-size:15px;margin:0 0 8px;color:#58a6ff}
+  .warn{background:#3d1d1d;border:1px solid #f85149;color:#ffb3ad;padding:10px;border-radius:8px;font-size:13px;margin-bottom:14px}
+  .mono{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;margin:6px 0;white-space:pre-wrap}
+  button{background:#238636;color:#fff;border:0;border-radius:6px;padding:8px 12px;margin:4px 6px 4px 0;font-weight:600;cursor:pointer;font-size:13px}
+  button:disabled{background:#30363d;color:#8b949e;cursor:not-allowed}
+  .note{font-size:12px;color:#8b949e;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="warn"><b>WAJIB SEPOLIA!</b> Ganti jaringan wallet ke <b>Ethereum Sepolia</b> SEBELUM klik apa pun (tombol mati sendiri kalau belum). Semua uji: <b>POTRET layar konfirmasi → REJECT</b>. value selalu 0 ETH — tapi tetap JANGAN pernah Agree.</div>
+
+<div class="card">
+  <h2>KONTEKS</h2>
+  <div class="mono" id="st">mengukur…</div>
+</div>
+
+<div class="card">
+  <h2>UJI (semua value=0, calldata dibuat-craft — POTRET konfirmasi lalu REJECT)</h2>
+  <button id="t1">T1 · ETH value=0 polos ke wallet-sendiri</button>
+  <button id="t2">T2 · decode: transfer USDC-Sepolia 1.0 (calldata craft)</button>
+  <button id="t3">T3 · transfer dgn alamat tergeser 1 byte (decode kacau?)</button>
+  <button id="t4">T4 · selector asing 0xdeadbeef + data</button>
+  <button id="t5">T5 · kirim ke EOA + data terpasang</button>
+  <div class="note">Yang dicari pada popup: (T2) apakah "Transfer 1 USDC" ditampilkan padahal ini bukan benar-benar panggilan token resmi; (T3) bagaimana alamat tergeser di-decode — kacau/kosong/berbeda dari kenyataan; (T4) apakah data asing ditampilkan RAW (jujur) atau kosong/tersembunyi; (T5) apakah ada peringatan "kamu mengirim data ke alamat biasa".</div>
+  <div class="mono" id="out">—</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const TARGET="0x5533F6B5F2D687d97bC37d6a8081F812a7D50c92"; // wallet HP sendiri (EIP-55 tervalidasi)
+const USDCS="0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"; // USDC Sepolia (EIP-55 tervalidasi)
+const SEP="0xaa36a7";
+const eth=window.ethereum;
+
+function pad(a){return a.toLowerCase().replace("0x","").padStart(64,"0");}
+function num(n){return n.toString(16).padStart(64,"0");}
+
+(async()=>{
+  let cid="";
+  try{cid=await eth.request({method:"eth_chainId"});}catch(e){}
+  const on=(cid||"").toLowerCase()===SEP;
+  $("st").textContent="URL: "+location.href
+    +"\nprovider: "+(eth?"ADA"+(eth.isBitKeep||eth.isBitgetWallet?" (Bitget)":""):"TIDAK ADA")
+    +"\nchainId: "+(cid||"?")+(on?" (Sepolia — tombol AKTIF)":" — BUKAN Sepolia! Ganti jaringan dulu (tombol mati)");
+  ["t1","t2","t3","t4","t5"].forEach(k=>{$(k).disabled=!on;});
+})();
+
+async function kirim(tx,label){
+  try{
+    let who;
+    const acc=await eth.request({method:"eth_accounts"});
+    who=acc&&acc[0];
+    if(!who)who=(await eth.request({method:"eth_requestAccounts"}))[0];
+    tx.from=who;
+    await eth.request({method:"eth_sendTransaction",params:[tx]});
+    $("out").textContent=label+"\n→ TERKIRIM?! (seharusnya di-REJECT — potret hash tx dan laporkan)";
+  }catch(e){
+    $("out").textContent=label+"\n→ REJECT/ERR (bagus): "+String(e&&e.message||e).slice(0,120);
+  }
+}
+
+$("t1").onclick=()=>kirim({to:TARGET,value:"0x0"},"T1 · ETH-0 polos");
+$("t2").onclick=()=>kirim({to:USDCS,value:"0x0",data:"0xa9059cbb"+pad(TARGET)+num(1000000)},"T2 · transfer USDC 1.0 craft");
+$("t3").onclick=()=>kirim({to:USDCS,value:"0x0",data:"0xa9059cbb"+"00"+pad(TARGET).slice(0,62)+num(1000000)},"T3 · alamat tergeser 1 byte");
+$("t4").onclick=()=>kirim({to:USDCS,value:"0x0",data:"0xdeadbeef"+"hello"},"T4 · selector asing");
+$("t5").onclick=()=>kirim({to:TARGET,value:"0x0",data:"0x1234"},"T5 · EOA + data");
+</script>
+</body>
+</html>
