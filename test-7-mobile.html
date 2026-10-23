@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>UJI KEAMANAN — P4 Mobile Lab v2 (Bitget Bounty)</title>
+<title>UJI KEAMANAN — P4 Mobile Lab v3 (Bitget Bounty)</title>
 <style>
   body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:14px}
   .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-bottom:14px}
@@ -23,32 +23,32 @@
 </style>
 </head>
 <body>
-<div class="warn"><b>ATURAN:</b> burner saja. personal_sign/permit = boleh ditandatangani (gratis). <b>SEMUA layar kirim/tx WAJIB CANCEL</b> — kita hanya POTRET tampilannya.</div>
+<div class="warn"><b>ATURAN:</b> semua target kirim = wallet HP-mu SENDIRI (kirim ke diri sendiri = nol risiko), tetap <b>CANCEL</b> di layar konfirmasi. personal_sign/permit = gratis, boleh di-sign.</div>
 
 <div class="card">
   <h2>A. STATUS KONTEKS</h2>
   <div class="mono" id="st">mengukur…</div>
   <button id="btnBitget" onclick="bukaBitget()">BUKA DI BROWSER BITGET</button>
-  <div class="note">Tombol ini hanya tampil di browser biasa (provider belum ADA). Di dalam dApp-browser Bitget tombol disembunyikan. Catat versi app: Settings → About.</div>
+  <div class="note">Tombol hilang sendiri kalau provider wallet terdeteksi (termasuk yang muncul terlambat). Di dalam dApp-browser: buka URL manual lewat menu wallet.</div>
 </div>
 
 <div class="card">
   <h2>B. QR / EIP-681 SEPOLIA (gratis — buka halaman ini di PC, scan pakai scanner Bitget di HP)</h2>
   <div id="qrbox"></div>
-  <div class="note">Butuh ETH Sepolia: faucet browser gratis https://sepolia-faucet.pk910.de (paste alamat wallet HP, mining ±10–20 mnt). Untuk tiap QR: scan → <b>POTRET layar ringkasan kirim</b> (alamat &amp; jumlah ter-parse) → <b>CANCEL</b>. Dicari: parse BEDA dari URI, format angka aneh, chain @11155111 diabaikan, S3 overflow ditolak rapi (bukan crash).</div>
+  <div class="note">Butuh ETH Sepolia: faucet browser gratis https://sepolia-faucet.pk910.de (paste alamat wallet HP, mining ±10–20 mnt). Tiap QR: scan → <b>POTRET layar ringkasan kirim</b> (alamat &amp; jumlah ter-parse) → <b>CANCEL</b>. Dicari: parse BEDA dari URI, format angka aneh, chain @11155111 diabaikan, S3 overflow ditolak rapi (bukan crash).</div>
 </div>
 
 <div class="card">
-  <h2>C. TORTUR PASTE ALAMAT — casing EIP-55 BENAR (COPY → tempel di layar Kirim → POTRET hasil → kembali)</h2>
+  <h2>C. TORTUR PASTE ALAMAT — target sekarang VALID (COPY → tempel di layar Kirim → POTRET hasil → kembali)</h2>
   <div id="tor"></div>
-  <div class="note">Ekspektasi: C1 (baseline bersih) DITERIMA; C2–C5 (kotor: spasi/newline/zero-width/RTL) ditolak; C6 (checksum rusak) ditolak dgn alasan checksum. Kalau C1 casing-benar masih ditolak ×3 → itu temuan sungguhan.</div>
+  <div class="note">Ekspektasi: C1 (baseline bersih) DITERIMA; C2–C5 (kotor) ditolak; C6 (checksum rusak, bytes sama) ditolak — ini menjawab apakah Bitget cek EIP-55 atau cuma struktur 40-hex.</div>
 </div>
 
 <div class="card">
-  <h2>D. TAMPILAN SIGN DI dApp-BROWSER (POTRET lembar konfirmasi: origin/URL ditampilkan?)</h2>
+  <h2>D. TAMPILAN SIGN DI dApp-BROWSER (POTRET lembar konfirmasi; spender = wallet sendiri = aman)</h2>
   <button onclick="psign()">1. personal_sign</button>
   <button class="b" onclick="esign()">2. EIP-712 Permit USDC</button>
-  <button class="b" onclick="esignMax()">3. EIP-712 Permit USDC = MAX (trigger kandidat #1)</button>
+  <button class="b" onclick="esignMax()">3. EIP-712 Permit USDC = MAX (trigger kandidat #1, spender valid)</button>
   <div class="mono" id="dout">—</div>
 </div>
 
@@ -74,7 +74,7 @@
 
 <script>
 const $=id=>document.getElementById(id);
-const B2="0xc8CEe9dC9Da67AF0EF121d7251ae8FcaF28DBF"; // burner-2, casing EIP-55 TERVERIFIKASI (verifikator keccak)
+const TARGET="0x5533F6B5F2D687d97bC37d6a8081F812a7D50c92"; // wallet HP user sendiri — EIP-55 TERVERIFIKASI (40 hex valid)
 const USDC="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"; // USDC mainnet (EIP-55 ✓)
 const MAX="115792089237316195423570985008687907853269984665640564039457584007913129639935"; // 2^256-1
 const IS_TOP=(window.self===window.top);
@@ -93,15 +93,22 @@ if(IS_TOP){
     +"\nprovider: "+(d.ada?"ADA (kemungkinan besar sudah di dApp-browser Bitget)":"TIDAK ADA (browser biasa)")
     +" | flag Bitget: "+d.bitget
     +"\nlayar: "+screen.width+"x"+screen.height;
-  if(d.ada)$("btnBitget").style.display="none"; // sudah di dalam wallet — tombol pindah-browser disembunyikan
+  function sembunyikanBtn(t){
+    if(window.ethereum){
+      const b=$("btnBitget"); if(b)b.style.display="none";
+      if(t)$("st").textContent+="\nprovider baru terdeteksi setelah ~"+t+"ms (injeksi wallet TERLAMBAT)";
+    }
+  }
+  if(d.ada)sembunyikanBtn(0);
+  else [400,1000,2000,4000].forEach(t=>setTimeout(()=>sembunyikanBtn(t),t));
 
-  // ---- B: EIP-681 Sepolia (gratis)
+  // ---- B: EIP-681 Sepolia (gratis, target = wallet sendiri)
   const SEP="11155111", USDCS="0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"; // USDC Sepolia (EIP-55 ✓)
   const qr=[
-    ["S1 · Sepolia ETH 0.001","ethereum:"+B2+"@"+SEP+"?value=1e15"],
-    ["S2 · Sepolia ETH 0.001234567890123456 (desimal panjang)","ethereum:"+B2+"@"+SEP+"?value=1234567890123456"],
-    ["S3 · Sepolia ETH value=2^256-1 (overflow)","ethereum:"+B2+"@"+SEP+"?value="+MAX],
-    ["S4 · USDC-Sepolia 1.0 (ERC-20)","ethereum:"+USDCS+"@"+SEP+"/transfer?address="+B2+"&uint256=1000000"]
+    ["S1 · Sepolia ETH 0.001","ethereum:"+TARGET+"@"+SEP+"?value=1e15"],
+    ["S2 · Sepolia ETH 0.001234567890123456 (desimal panjang)","ethereum:"+TARGET+"@"+SEP+"?value=1234567890123456"],
+    ["S3 · Sepolia ETH value=2^256-1 (overflow)","ethereum:"+TARGET+"@"+SEP+"?value="+MAX],
+    ["S4 · USDC-Sepolia 1.0 (ERC-20)","ethereum:"+USDCS+"@"+SEP+"/transfer?address="+TARGET+"&uint256=1000000"]
   ];
   qr.forEach((q,i)=>{
     const uri=q[1];
@@ -110,14 +117,14 @@ if(IS_TOP){
       +'<img class="qr" width="180" height="180" alt="QR '+i+'" src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=1&data='+encodeURIComponent(uri)+'">');
   });
 
-  // ---- C: torture paste (casing EIP-55 benar)
+  // ---- C: torture paste (semua baseline VALID sekarang)
   const tor=[
-    ["C1 · alamat polos (baseline — harusnya DITERIMA)",B2],
-    ["C2 · spasi di belakang",B2+" "],
-    ["C3 · newline di belakang",B2+"\n"],
-    ["C4 · zero-width space U+200B di belakang",B2+"\u200B"],
-    ["C5 · RTL-override U+202E di depan","\u202E"+B2],
-    ["C6 · checksum EIP-55 RUSAK (huruf terakhir F→f; alamat valid, checksum salah)","0xc8CEe9dC9Da67AF0EF121d7251ae8FcaF28DBf"]
+    ["C1 · alamat polos (baseline — harusnya DITERIMA)",TARGET],
+    ["C2 · spasi di belakang",TARGET+" "],
+    ["C3 · newline di belakang",TARGET+"\n"],
+    ["C4 · zero-width space U+200B di belakang",TARGET+"\u200B"],
+    ["C5 · RTL-override U+202E di depan","\u202E"+TARGET],
+    ["C6 · checksum EIP-55 RUSAK (c→C di 'D50c92'; bytes sama, checksum salah)","0x5533F6B5F2D687d97bC37d6a8081F812a7D50C92"]
   ];
   tor.forEach(t=>{
     const row=document.createElement("div");
@@ -139,7 +146,7 @@ if(IS_TOP){
     }catch(e){$("dout").textContent="ERR: "+String(e&&e.message||e).slice(0,160);}
   }
   function permitTd(value,who){
-    return {types:{EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}],Permit:[{name:"owner",type:"address"},{name:"spender",type:"address"},{name:"value",type:"uint256"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]},primaryType:"Permit",domain:{name:"USD Coin",version:"2",chainId:1,verifyingContract:USDC},message:{owner:who,spender:B2,value:value,nonce:"0",deadline:"9999999999"}};
+    return {types:{EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}],Permit:[{name:"owner",type:"address"},{name:"spender",type:"address"},{name:"value",type:"uint256"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]},primaryType:"Permit",domain:{name:"USD Coin",version:"2",chainId:1,verifyingContract:USDC},message:{owner:who,spender:TARGET,value:value,nonce:"0",deadline:"9999999999"}};
   }
   async function esign(){
     try{
@@ -152,9 +159,9 @@ if(IS_TOP){
     try{
       const who=await akun();
       const r=await eth.request({method:"eth_signTypedData_v4",params:[who,JSON.stringify(permitTd(MAX,who))]});
-      $("dout").textContent="SIG: "+String(r).slice(0,30)+"… (SIGNED — kandidat #1 tidak repro di mobile)";
+      $("dout").textContent="SIG: "+String(r).slice(0,30)+"… (SIGNED — kandidat #1 tidak repro di mobile, spender valid)";
     }catch(e){
-      $("dout").textContent="ERR: "+String(e&&e.message||e).slice(0,200)+"  <-- KALAU INI TOAST width/160: POTRET SEGERA! (kandidat #1 hidup di mobile)";
+      $("dout").textContent="ERR: "+String(e&&e.message||e).slice(0,200)+"  <-- KALAU INI TOAST width/160: POTRET SEGERA!";
     }
   }
   window.psign=psign;window.esign=esign;window.esignMax=esignMax;
@@ -172,7 +179,13 @@ if(IS_TOP){
     }
     if(e.data.type==="connectResult"){$("stat").textContent="status: HASIL CONNECT → "+JSON.stringify(e.data.payload).slice(0,200);}
   });
-  function bukaBitget(){location.href="bitkeep://dapp?url="+encodeURIComponent(location.href.split("#")[0]);}
+  function bukaBitget(){
+    if(window.ethereum){
+      $("st").textContent+="\n[INFO] Provider sudah ADA — kamu SUDAH di dApp-browser. Tombol ini memang tidak berfungsi di dalam wallet (normal).";
+      return;
+    }
+    location.href="bitkeep://dapp?url="+encodeURIComponent(location.href.split("#")[0]);
+  }
   window.bukaBitget=bukaBitget;
 }else{
   const d=detect();
