@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UJI KEAMANAN — P6 Blind-Signing Display Lab v1 (Bitget Bounty)</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:14px}
+  .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-bottom:14px}
+  h2{font-size:15px;margin:0 0 8px;color:#58a6ff}
+  .warn{background:#3d1d1d;border:1px solid #f85149;color:#ffb3ad;padding:10px;border-radius:8px;font-size:13px;margin-bottom:14px}
+  .mono{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;margin:6px 0;white-space:pre-wrap}
+  button{background:#238636;color:#fff;border:0;border-radius:6px;padding:8px 12px;margin:4px 6px 4px 0;font-weight:600;cursor:pointer;font-size:13px}
+  button.b{background:#1f6feb}
+  .note{font-size:12px;color:#8b949e;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="warn"><b>ATURAN:</b> burner saja. Semua di sini = SIGNING GRATIS (tidak ada tx). Untuk tiap uji: POTRET popup <b>dari atas sampai bawah</b> (apa yang user LIHAT = apa yang di-SIGN?). Kalau popup nge-hang: tutup popup = cancel, aman.</div>
+
+<div class="card">
+  <h2>KONTEKS</h2>
+  <div class="mono" id="st">mengukur…</div>
+</div>
+
+<div class="card">
+  <h2>S. PERSONAL_SIGN — FIDELITAS TEKS (POTRET popup atas &amp; bawah)</h2>
+  <button onclick="s1()">S1 · 40 baris + baris berbahaya di PALING BAWAH (terpotong/ada scroll?)</button>
+  <button onclick="s2()">S2 · kata "transfer" dipecah U+200B (terlihat sebagai satu kata?)</button>
+  <button onclick="s3()">S3 · U+202E membalik angka (123456 tampil jadi 123654?)</button>
+  <button onclick="s4()">S4 · payload ±100 KB (popup tetap responsif?)</button>
+  <div class="note">S1: kalau baris terakhir TIDAK bisa dilihat user (tidak ada scroll/indikator potong) → kandidat temuan blind-signing. S3: kalau tampilan angka ≠ angka asli → kandidat display-spoof. Boleh Cancel di popup — yang dinilai cuma TAMPILANNYA (kalau di-sign pun gratis).</div>
+</div>
+
+<div class="card">
+  <h2>E. EIP-712 — FIDELITAS FIELD (POTRET popup: semua field terlihat?)</h2>
+  <button class="b" onclick="e1()">E1 · string 800 karakter + rahasia di akhir</button>
+  <button class="b" onclick="e2()">E2 · array 40 alamat (tampil semua / dipangkas?)</button>
+  <button class="b" onclick="e3()">E3 · struct nested 3 tingkat (value MAX di level terdalam)</button>
+  <div class="note">Yang dicari: field yang TIDAK dirender atau dipotong tanpa indikator — user menandatangani sesuatu yang tidak pernah ia lihat.</div>
+</div>
+
+<div class="mono" id="out">—</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const eth=window.ethereum;
+const B2="0xc8CEEe9dc9d0a67Af0ef121A72D51aEBFcaf2BDF"; // burner-2 (EIP-55 tervalidasi)
+const MAX="115792089237316195423570985008687907853269984665640564039457584007913129639935";
+
+(async()=>{
+  let cid="?";
+  try{cid=await eth.request({method:"eth_chainId"});}catch(e){}
+  $("st").textContent="URL: "+location.href
+    +"\nprovider: "+(eth?"ADA"+(eth.isBitKeep||eth.isBitgetWallet?" (Bitget)":""):"TIDAK ADA")
+    +"\nchainId: "+cid;
+})();
+
+async function akun(){const a=await eth.request({method:"eth_requestAccounts"});return a[0];}
+function hex(s){return "0x"+[...new TextEncoder().encode(s)].map(x=>x.toString(16).padStart(2,"0")).join("");}
+async function psign(msg,label){
+  try{
+    const who=await akun();
+    const r=await eth.request({method:"personal_sign",params:[hex(msg),who]});
+    $("out").textContent=label+"\n→ SIGNED (bandingkan: apa yang tampil di popup vs isi asli di bawah):\n"+msg.slice(0,300);
+  }catch(e){$("out").textContent=label+"\n→ ERR/CANCEL: "+String(e&&e.message||e).slice(0,140);}
+}
+async function td_sign(td,label){
+  try{
+    const who=await akun();
+    const r=await eth.request({method:"eth_signTypedData_v4",params:[who,JSON.stringify(td)]});
+    $("out").textContent=label+"\n→ SIGNED (POTRET popup sudah dibandingkan dgn isi asli?)";
+  }catch(e){$("out").textContent=label+"\n→ ERR/CANCEL: "+String(e&&e.message||e).slice(0,140);}
+}
+
+// ---- S1: 40 baris pengisi + baris berbahaya di paling bawah
+async function s1(){
+  let m="";
+  for(let i=1;i<=40;i++)m+="Baris "+i+": teks pengisi biasa, tidak ada yang menarik di sini.\n";
+  m+="!!! BARIS TERAKHIR — WAJIB TERLIHAT USER SEBELUM SIGN: SAYA SETUJU TRANSFER SELURUH SALDO KE 0x000000000000000000000000000000000000dEaD !!!";
+  psign(m,"S1 · personal_sign 40 baris + 1 baris kritis di bawah");
+}
+// ---- S2: kata terpecah zero-width
+async function s2(){
+  const m="Saya ingin tr\u200Bansfer 1.5 ETH ke 0x000000000000000000000000000000000000dEaD sekarang juga.\n(Asli: kata 'transfer' mengandung U+200B di tengah — apakah popup menampilkannya utuh atau 'tr ansfer'?)";
+  psign(m,"S2 · personal_sign zero-width split");
+}
+// ---- S3: RTL-override membalik digit
+async function s3(){
+  const m="Anda akan membayar tepat 123\u202E456\u202C ETH.\n(Asli di data: '123456' — dgn U+202E/U+202C di antaranya; kalau popup menampilkan urutan terbalik = display-spoof)";
+  psign(m,"S3 · personal_sign RTL-override digit");
+}
+// ---- S4: payload besar ±100KB
+async function s4(){
+  const m=("X").repeat(100000)+"\nAKHIR: baris tunggal ini yang penting.";
+  psign(m,"S4 · personal_sign ±100 KB");
+}
+
+// ---- E1: string panjang
+async function e1(){
+  const td={types:{EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"}],Message:[{name:"note",type:"string"}]},primaryType:"Message",domain:{name:"DisplayLab",version:"1",chainId:1},message:{note:("A").repeat(760)+" ...PENTING-DI-AKHIR: approveAll=true spendLimit=unlimited to=0xdEaD"}};
+  td_sign(td,"E1 · EIP-712 string 800 karakter");
+}
+// ---- E2: array 40 alamat
+async function e2(){
+  const items=[];for(let i=0;i<40;i++)items.push(B2);
+  const td={types:{EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"}],Batch:[{name:"items",type:"address[]"}]},primaryType:"Batch",domain:{name:"DisplayLab",version:"1",chainId:1},message:{items:items}};
+  td_sign(td,"E2 · EIP-712 array 40 alamat");
+}
+// ---- E3: nested 3 tingkat
+async function e3(){
+  const td={types:{
+    EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"}],
+    Root:[{name:"label",type:"string"},{name:"child",type:"Child"}],
+    Child:[{name:"tag",type:"string"},{name:"sub",type:"Sub"}],
+    Sub:[{name:"deep",type:"Deep"}],
+    Deep:[{name:"value",type:"uint256"},{name:"note",type:"string"}]
+  },primaryType:"Root",domain:{name:"DisplayLab",version:"1",chainId:1},
+  message:{label:"root",child:{tag:"child-level",sub:{deep:{value:MAX,note:"CATATAN TERDALAM: limit unlimited"}}}}};
+  td_sign(td,"E3 · EIP-712 nested 3 tingkat");
+}
+
+window.s1=s1;window.s2=s2;window.s3=s3;window.s4=s4;window.e1=e1;window.e2=e2;window.e3=e3;
+</script>
+</body>
+</html>
